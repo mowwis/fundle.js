@@ -25,9 +25,13 @@ export class Templater {
                     const targetElements = resolveElements(beforeEvent);
                     if (targetElements.length > 0) {
                         targetElements.forEach(targetElement => {
-                            const elementForCallback = resolveElements(fullSelector)[0] || targetElement;
-                            targetElement.removeEventListener(eventType, (event) => callback(elementForCallback, event));
-                            targetElement.addEventListener(eventType, (event) => callback(elementForCallback, event));
+                            // dont reapply event listeners
+                            if (!targetElement._eventListeners) targetElement._eventListeners = new Set();
+                            if (!targetElement._eventListeners.has(rawSelector)) {
+                                const elementForCallback = resolveElements(fullSelector)[0] || targetElement;
+                                targetElement.addEventListener(eventType, (event) => callback(elementForCallback, event));
+                                targetElement._eventListeners.add(rawSelector);
+                            }
                         });
                     } else console.warn(`Templater: Event target element(s) not found for base selector: "${beforeEvent}"`);
                 } else {
@@ -43,33 +47,44 @@ export class Templater {
 
 export class Router {
     static routes = [];
-    static currentRoute = null;
+    static defaultPath = '/';
 
     static route(path, callback) { this.routes.push({ path, callback }); }
 
-    static navigate(path) {
-        const route = this.matchRoute(path || window.location.pathname);
-        if (!route) this.go('/', replace = true);
+    static go(path, replace = false) {
+        if (replace) history.replaceState({}, '', path);
+        else history.pushState({}, '', path);
+        this.#navigate(path);
+    }
 
-        this.currentRoute = route;
+    static init() {
+        this.#navigate();
+        window.addEventListener('popstate', () => this.#navigate());
+    }
+
+    static #navigate(path) {
+        const route = this.#matchRoute(path || window.location.pathname);
+        if (!route) {
+            this.go(this.defaultPath, true);
+            return;
+        }
         route.callback(route.params, route.queryParams);
     }
 
-    static matchRoute(path) {
+    static #matchRoute(path) {
         for (const route of this.routes) {
-            const match = this.matchPath(path, route.path);
+            const match = this.#matchPath(path, route.path);
             if (match) return { ...route, params: match.params, queryParams: match.queryParams };
         }
         return null;
     }
 
-    static matchPath(path, routePattern) {
+    static #matchPath(path, routePattern) {
         const [urlPath, queryString] = path.split('?');
         const queryParams = new URLSearchParams(queryString);
 
         const pathParts = urlPath.split('/').filter(Boolean);
         const patternParts = routePattern.split('/').filter(Boolean);
-
         if (pathParts.length !== patternParts.length) return null;
 
         const params = {};
@@ -81,17 +96,9 @@ export class Router {
                 return null;
             }
         }
-
         return { params, queryParams };
     }
-
-    static go(path, replace = false) {
-        if (replace) history.replaceState({}, '', path);
-        else history.pushState({}, '', path);
-        this.navigate(path);
-    }
 }
-window.addEventListener('popstate', () => Router.navigate(location.pathname));
 
 export class API {
     static baseUrl = "/api";
