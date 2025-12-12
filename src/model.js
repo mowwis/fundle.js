@@ -1,7 +1,10 @@
+import { Collection } from "./index.js";
+
 export class Model extends EventTarget {
     static fields = {};
-    static instanceCache = new Map();
-    static classEventTarget = new EventTarget();
+    static endpoint = null;
+    static _instanceCache = new Map();
+    static _classEventTarget = new EventTarget();
 
     fieldChanges = {};
     get changeDelta() { return Object.entries(this.fieldChanges).reduce((acc, [k, v]) => { acc[k] = v.newValue; return acc; }, {}); }
@@ -9,11 +12,11 @@ export class Model extends EventTarget {
     constructor(data = {}) {
         super();
 
-        this.initializeFields();
+        this.#initializeFields();
 
         const primaryKeyValue = data[this.constructor.primaryField];
-        if (primaryKeyValue && this.constructor.instanceCache.has(primaryKeyValue)) {
-            const existingModel = this.constructor.instanceCache.get(primaryKeyValue);
+        if (primaryKeyValue && this.constructor._instanceCache.has(primaryKeyValue)) {
+            const existingModel = this.constructor._instanceCache.get(primaryKeyValue);
             existingModel.assign(data);
             return existingModel;
         }
@@ -21,17 +24,21 @@ export class Model extends EventTarget {
         this.assign(data);
     }
 
-    initializeFields() { // do casting in here (all field logic / verifiaction)
-        Object.keys(this.constructor.fields).forEach(field => {
-            const privateFieldName = `_${field}`;
+    #initializeFields() {
+        Object.entries(this.constructor.fields).forEach(([field, parameters]) => {
+            var type;
+            if (typeof parameters === 'object') ({ type } = parameters);
+            else type = parameters;
+
+            const privateFieldName = `#${field}`;
             this[privateFieldName] = undefined;
 
             Object.defineProperty(this, field, {
                 get() { return this[privateFieldName]; },
                 set(newValue) {
                     const oldValue = this[privateFieldName];
-                    if (newValue === oldValue) return;
-                    this[privateFieldName] = newValue;
+                    this[privateFieldName] = this.constructor._castFieldValue(newValue, type);
+                    if (this[privateFieldName] === oldValue) return;
 
                     if (this.fieldChanges[field]) this.fieldChanges[field].newValue = newValue;
                     else this.fieldChanges[field] = { oldValue, newValue };
@@ -42,8 +49,27 @@ export class Model extends EventTarget {
         });
     }
 
+    static async all(params = {}) {
+        let data;
+        if (!this.endpoint) data = [...this._instanceCache.values()];
+        else {
+            var endpoint = this.endpoint;
+            Object.entries(params).forEach(([k, v]) => endpoint = endpoint.replace(`:${k}`, String(v)));
+            data = await api.get(endpoint);
+        }
+        return new Collection(this).fromArray(data);
+    }
+
+    // async fetchById(id) { ... } ??
+
     async save() {
+        if (!this.endpoint) return this.assign();
+
         let updatedData;
+        if (!this.primaryKey) updatedData = await api.post(this.endpoint, this);
+        else if (Object.keys(this.fieldChanges).length) {
+            updatedData = await api.patch(`${this.endpoint}/${this.primaryKey}`, this.changeDelta);
+        }
         if (updatedData) this.assign(updatedData);
     }
 
@@ -58,22 +84,21 @@ export class Model extends EventTarget {
     }
 
     async delete() {
-        if (!this.primaryKey) return;
-        this.constructor.instanceCache.delete(this.primaryKey);
+        if (this.primaryKey) this.constructor._instanceCache.delete(this.primaryKey);
+        if (this.primaryKey && this.endpoint) await api.delete(`${this.endpoint}/${this.primaryKey}`);
+
         const deleteEvent = ModelEvent.delete(this);
         this.dispatchEvent(deleteEvent);
         this.constructor.dispatchEvent(deleteEvent);
     }
 
     assign(data = {}) {
-        Object.entries(this.constructor.fields).forEach(([field, { type }]) => {
-            if (field in data) {
-                this[field] = this.constructor.castFieldValue(data[field], type);
-            }
+        Object.keys(this.constructor.fields).forEach(field => {
+            if (field in data) this[field] = data[field];
         });
         const primaryKeyValue = data[this.constructor.primaryField];
-        if (primaryKeyValue && !this.constructor.instanceCache.has(primaryKeyValue)) {
-            this.constructor.instanceCache.set(primaryKeyValue, this);
+        if (primaryKeyValue && !this.constructor._instanceCache.has(primaryKeyValue)) {
+            this.constructor._instanceCache.set(primaryKeyValue, this);
             this.constructor.dispatchEvent(ModelEvent.new(this));
         }
         if (Object.keys(this.fieldChanges).length) {
@@ -82,19 +107,28 @@ export class Model extends EventTarget {
         this.fieldChanges = {};
     }
 
+    get endpoint() {
+        if (!this.constructor.endpoint) return;
+        var endpoint = this.constructor.endpoint;
+        Object.keys(this.constructor.fields).forEach(field => {
+            endpoint = endpoint.replace(`:${field}`, String(this[field]));
+        });
+        return endpoint;
+    }
+
     get primaryKey() { return this[this.constructor.primaryField]; }
     static get primaryField() {
-        const primaryField = Object.keys(this.fields).find(field => this.fields[field].primary_key);
+        const primaryField = Object.keys(this.fields).find(field => this.fields[field].primaryKey);
         if (primaryField) return primaryField;
         if ('id' in this.fields) return 'id';
         throw new Error("Model must have a primary key or 'id' field defined.");
     }
 
-    static dispatchEvent(event) { this.classEventTarget.dispatchEvent(event); }
-    static addEventListener(type, callback) { this.classEventTarget.addEventListener(type, callback); }
-    static removeEventListener(type, callback) { this.classEventTarget.removeEventListener(type, callback); }
+    static dispatchEvent(event) { this._classEventTarget.dispatchEvent(event); }
+    static addEventListener(type, callback) { this._classEventTarget.addEventListener(type, callback); }
+    static removeEventListener(type, callback) { this._classEventTarget.removeEventListener(type, callback); }
 
-    static castFieldValue(value, type) {
+    static _castFieldValue(value, type) {
         if (value === null || value === undefined) return value;
         switch (type) {
             case Date:
@@ -110,9 +144,9 @@ export class Model extends EventTarget {
 
     toJSON() {
         const jsonObject = {};
-        Object.keys(this.constructor.fields).forEach((key) => {
-            const value = this[key];
-            if (value !== null && value !== undefined) jsonObject[key] = value instanceof Date ? value.toISOString() : value;
+        Object.keys(this.constructor.fields).forEach(field => {
+            const value = this[field];
+            if (value !== null && value !== undefined) jsonObject[field] = value instanceof Date ? value.toISOString() : value;
         });
         return jsonObject;
     }
