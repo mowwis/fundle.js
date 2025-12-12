@@ -1,3 +1,4 @@
 export * from "./utils.js";
 export * from "./model.js";
-// export * from "./component.js";
+export * from "./component.js";
+export * from "./collection.js";
