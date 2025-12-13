@@ -170,7 +170,7 @@ class Model extends EventTarget {
         else {
             var endpoint = this.endpoint;
             Object.entries(params).forEach(([k, v]) => endpoint = endpoint.replace(`:${k}`, String(v)));
-            data = await api.get(endpoint);
+            data = await API.get(endpoint);
         }
         return new Collection(this).fromArray(data);
     }
@@ -181,9 +181,9 @@ class Model extends EventTarget {
         if (!this.endpoint) return this.assign();
 
         let updatedData;
-        if (!this.primaryKey) updatedData = await api.post(this.endpoint, this);
+        if (!this.primaryKey) updatedData = await API.post(this.endpoint, this);
         else if (Object.keys(this.fieldChanges).length) {
-            updatedData = await api.patch(`${this.endpoint}/${this.primaryKey}`, this.changeDelta);
+            updatedData = await API.patch(`${this.endpoint}/${this.primaryKey}`, this.changeDelta);
         }
         if (updatedData) this.assign(updatedData);
     }
@@ -200,7 +200,7 @@ class Model extends EventTarget {
 
     async delete() {
         if (this.primaryKey) this.constructor._instanceCache.delete(this.primaryKey);
-        if (this.primaryKey && this.endpoint) await api.delete(`${this.endpoint}/${this.primaryKey}`);
+        if (this.primaryKey && this.endpoint) await API.delete(`${this.endpoint}/${this.primaryKey}`);
 
         const deleteEvent = ModelEvent.delete(this);
         this.dispatchEvent(deleteEvent);
