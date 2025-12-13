@@ -37,6 +37,7 @@ class Component extends HTMLElement {
             this.#collection.addEventListener(ModelEvent.NEW, this.#onCollectionChange);
             this.#collection.addEventListener(ModelEvent.CHANGE, this.#onCollectionChange);
         }
+        this.render();
     }
 
     render() { Templater.bind(this, this.bindings); }
