@@ -119,14 +119,17 @@ class Collection extends EventTarget {
 class Model extends EventTarget {
     static fields = {};
     static endpoint = null;
-    static _instanceCache = new Map();
-    static _classEventTarget = new EventTarget();
+    static _instanceCache;
+    static _classEventTarget;
 
     fieldChanges = {};
     get changeDelta() { return Object.entries(this.fieldChanges).reduce((acc, [k, v]) => { acc[k] = v.newValue; return acc; }, {}); }
 
     constructor(data = {}) {
         super();
+
+        if (this.constructor._instanceCache === undefined) this.constructor._instanceCache = new Map();
+        if (this.constructor._classEventTarget === undefined) this.constructor._classEventTarget = new EventTarget();
 
         this.#initializeFields();
 
@@ -167,6 +170,7 @@ class Model extends EventTarget {
 
     static async all(params = {}) {
         let data;
+        if (this._instanceCache === undefined) this._instanceCache = new Map();
         if (!this.endpoint) data = [...this._instanceCache.values()];
         else {
             var endpoint = this.endpoint;
@@ -240,9 +244,9 @@ class Model extends EventTarget {
         throw new Error("Model must have a primary key or 'id' field defined.");
     }
 
-    static dispatchEvent(event) { this._classEventTarget.dispatchEvent(event); }
-    static addEventListener(type, callback) { this._classEventTarget.addEventListener(type, callback); }
-    static removeEventListener(type, callback) { this._classEventTarget.removeEventListener(type, callback); }
+    static dispatchEvent(event) { if (this._classEventTarget === undefined) this._classEventTarget = new EventTarget(); this._classEventTarget.dispatchEvent(event); }
+    static addEventListener(type, callback) { if (this._classEventTarget === undefined) this._classEventTarget = new EventTarget(); this._classEventTarget.addEventListener(type, callback); }
+    static removeEventListener(type, callback) { if (this._classEventTarget === undefined) this._classEventTarget = new EventTarget(); this._classEventTarget.removeEventListener(type, callback); }
 
     static _castFieldValue(value, type) {
         if (value === null || value === undefined) return value;
