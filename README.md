@@ -18,7 +18,7 @@ Fundle.js is designed as a small, dependency-free library. Include it via a scri
 <script src="https://github.com/mowwis/fundle.js/releases/latest/download/fundle.min.js"></script>
 
 <!-- Specific version via script tag -->
-<script src="https://github.com/mowwis/fundle.js/releases/download/v0.0-alpha/fundle.min.js"></script>
+<script src="https://github.com/mowwis/fundle.js/releases/download/v1.0.0/fundle.min.js"></script>
 ```
 
 
