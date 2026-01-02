@@ -156,7 +156,6 @@ export class Model extends EventTarget {
     }
 }
 
-
 export class ModelEvent extends CustomEvent {
     static NEW = 'new';
     static CHANGE = 'change';
