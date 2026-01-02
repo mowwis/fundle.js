@@ -25,14 +25,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: '.github/workflows/*.yml'
 
-      # - name: Install dependencies
-      #   run: npm ci
-
       - name: Generate Distribution Files
         run: |
           mkdir -p dist
-          npx terser src/index.js -o dist/fundle.js --beautify
-          npx terser src/index.js -o dist/fundle.min.js --compress --mangle
+          npx esbuild src/index.js --bundle --format=iife --global-name=Fundle --outfile=dist/fundle.js
+          npx esbuild src/index.js --bundle --format=iife --global-name=Fundle --minify --outfile=dist/fundle.min.js
 
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v5
