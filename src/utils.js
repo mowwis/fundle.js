@@ -64,10 +64,7 @@ export class Router {
 
     static #navigate(path) {
         const route = this.#matchRoute(path || window.location.pathname);
-        if (!route) {
-            this.go(this.defaultPath, true);
-            return;
-        }
+        if (!route) return this.go(this.defaultPath, true);
         route.callback(route.params, route.queryParams);
     }
 
